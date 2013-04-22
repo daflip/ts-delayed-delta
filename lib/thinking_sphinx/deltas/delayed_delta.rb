@@ -52,6 +52,14 @@ class ThinkingSphinx::Deltas::DelayedDelta <
   end
 end
 
+Delayed::Job.class_eval do
+  before_save :calculate_checksum
+  attr_accessible :checksum
+  def calculate_checksum
+    self.checksum = Digest::MD5.hexdigest(self.handler)
+  end
+end
+
 require 'thinking_sphinx/deltas/delayed_delta/delta_job'
 require 'thinking_sphinx/deltas/delayed_delta/flag_as_deleted_job'
 require 'thinking_sphinx/deltas/delayed_delta/railtie' if defined?(Rails)
