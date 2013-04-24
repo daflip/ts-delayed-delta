@@ -11,8 +11,7 @@ require 'thinking_sphinx'
 # @author Patrick Allan
 # @see http://ts.freelancing-gods.com Thinking Sphinx
 #
-class ThinkingSphinx::Deltas::DelayedDelta <
-  ThinkingSphinx::Deltas::DefaultDelta
+class ThinkingSphinx::Deltas::DelayedDelta < ThinkingSphinx::Deltas::DefaultDelta
 
   def self.cancel_jobs
     Delayed::Job.delete_all(
@@ -21,6 +20,10 @@ class ThinkingSphinx::Deltas::DelayedDelta <
   end
 
   def self.enqueue_unless_duplicates(object)
+
+    # if we're running as a DJ worker then just do the work now!
+    return object.perform if Delayed::Job.running_as_dj_worker?
+
     return if Delayed::Job.where(
       :checksum => Digest::MD5.hexdigest(object.to_yaml),
       :locked_at => nil,
@@ -34,11 +37,14 @@ class ThinkingSphinx::Deltas::DelayedDelta <
   end
 
   def delete(index, instance)
-    Delayed::Job.enqueue(
-      ThinkingSphinx::Deltas::DelayedDelta::FlagAsDeletedJob.new(
-        index.name, index.document_id_for_key(instance.id)
-      ), :priority => self.class.priority
+    new_delete_job = ThinkingSphinx::Deltas::DelayedDelta::FlagAsDeletedJob.new(
+      index.name, index.document_id_for_key(instance.id)
     )
+
+    # if we're running as a DJ worker then just do the work now!
+    return new_delete_job.perform if Delayed::Job.running_as_dj_worker?
+
+    Delayed::Job.enqueue new_delete_job, :priority => self.class.priority
   end
 
   # Adds a job to the queue for processing the given index.
@@ -57,6 +63,11 @@ Delayed::Job.class_eval do
   attr_accessible :checksum
   def calculate_checksum
     self.checksum = Digest::MD5.hexdigest(self.handler)
+  end
+
+  # sorry - i couldn't find an easier way to detect this
+  def self.running_as_dj_worker?
+    $0.to_s.match /rake|delayed_job/
   end
 end
 
