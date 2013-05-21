@@ -22,7 +22,7 @@ class ThinkingSphinx::Deltas::DelayedDelta < ThinkingSphinx::Deltas::DefaultDelt
   def self.enqueue_unless_duplicates(object)
 
     # if we're running as a DJ worker then just do the work now!
-    return object.perform if Delayed::Job.running_as_dj_worker?
+    return object.perform if Delayed::Job.running_as_dj_worker? 
 
     return if Delayed::Job.where(
       :checksum => Digest::MD5.hexdigest(object.to_yaml),
@@ -67,7 +67,7 @@ Delayed::Job.class_eval do
 
   # sorry - i couldn't find an easier way to detect this
   def self.running_as_dj_worker?
-    $0.to_s.match /rake|delayed_job/
+    $0.to_s.match(/rake|delayed_job/) or Rails.env.test?
   end
 end
 
